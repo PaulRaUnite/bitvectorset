@@ -1,0 +1,12 @@
+(library
+ (public_name bitvectorset)
+ (name bitvectorset)
+ (inline_tests)
+ (wrapped false)
+ (libraries fast_bitvector iter sexplib0)
+ (preprocess
+  (pps
+   ppx_inline_test
+   ppx_assert
+   ppx_sexp_conv
+   ppx_compare)))
