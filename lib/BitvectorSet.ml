@@ -1,7 +1,8 @@
-module Make (K : Set.OrderedType) = struct
+module Make (K : Hashtbl.HashedType) = struct
   module V = Fast_bitvector
+  module H = Hashtbl.Make (K)
 
-  let mapping : (K.t, int) Hashtbl.t = Hashtbl.create 128
+  let mapping : int H.t = H.create 128
   let inverse : K.t Dynarray.t = Dynarray.create ()
 
   type elt = K.t
@@ -10,11 +11,11 @@ module Make (K : Set.OrderedType) = struct
   let empty = V.create ~len:0
 
   let to_offset k =
-    match Hashtbl.find_opt mapping k with
+    match H.find_opt mapping k with
     | Some x -> x
     | None ->
         let x = Dynarray.length inverse in
-        Hashtbl.add mapping k x;
+        H.add mapping k x;
         Dynarray.add_last inverse k;
         x
 
@@ -78,6 +79,8 @@ module Make (K : Set.OrderedType) = struct
   let to_list s = elements s
   let to_rev_iter s f = rev_iter f s
 
+  (* 
+  TODO: not sure this is useful for me at all
   let min_elt_opt s =
     match List.sort K.compare (elements s) with x :: _ -> Some x | [] -> None
 
@@ -87,7 +90,7 @@ module Make (K : Set.OrderedType) = struct
     | [] -> None
 
   let min_elt s = Option.get (min_elt_opt s)
-  let max_elt s = Option.get (max_elt_opt s)
+  let max_elt s = Option.get (max_elt_opt s) *)
 
   let choose_opt s =
     let n = Random.int (cardinal s) in
@@ -110,7 +113,6 @@ module Make (K : Set.OrderedType) = struct
       s |> to_iter |> Iter.filter (Fun.negate p) |> of_iter )
 
   let is_empty = V.is_empty
-
   let mem e s = V.Relaxed.mem s (to_offset e)
   let equal = V.Relaxed.equal
   let subset = V.Relaxed.subset
@@ -119,7 +121,7 @@ module Make (K : Set.OrderedType) = struct
 end
 
 module MakeSexp (K : sig
-  include Set.OrderedType
+  include Hashtbl.HashedType
   include Sexplib0.Sexpable.S with type t := t
 end) =
 struct
