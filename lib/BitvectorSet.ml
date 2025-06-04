@@ -33,34 +33,14 @@ module Make (K : Set.OrderedType) = struct
 
   let singleton e =
     let e = to_offset e in
-    V.create ~len:e
-
-  let remove e s =
-    let e = to_offset e in
-    V.set_to s e false;
-    s
-
-  (* let add e s =
-    let e = to_offset e in
-    let s =
-      if V.length s <= e then
-        (Printf.printf "%i\n" (V.length s - e + 1);
-        V.extend_inplace ~by:(V.length s - e + 1) s)
-      else s
-    in
-    V.set_to s e true;
-    s
-
-  let singleton e =
-    let e = to_offset e in
-    let s = V.create ~len:e in
+    let s = V.create ~len:(e + 1) in
     V.set s e;
     s
 
   let remove e s =
     let e = to_offset e in
     if V.length s > e then V.set_to s e false;
-    s *)
+    s
 
   let union x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
@@ -68,37 +48,74 @@ module Make (K : Set.OrderedType) = struct
 
   let inter x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
-    (* print_endline (Sexplib0.Sexp.to_string (V.sexp_of_t (result) )); *)
-    V.Relaxed.intersect ~result x y
+    V.Relaxed.inter ~result x y
 
-  let disjoint x y =
-    let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
-    V.is_empty (V.Relaxed.intersect ~result x y)
+  let disjoint = V.Relaxed.disjoint
 
   let diff x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
-    V.Relaxed.difference ~result x y
+    V.Relaxed.diff ~result x y
 
+  let equal_modulo = V.Relaxed.equal_modulo
+
+  (*TODO: semantically does not correspond to Set.S, should follow the order defined by K *)
+  let fold f s init =
+    V.fold_lefti ~init
+      ~f:(fun acc i bit -> if bit then f (of_offset i) acc else acc)
+      s
+
+  let iter f s = V.iter_seti ~f:(Fun.compose f of_offset) s
+  let rev_iter f s = V.rev_iter_seti ~f:(Fun.compose f of_offset) s
   let cardinal s = V.popcount s
+  let of_iter i = i |> Iter.map to_offset |> V.of_offset_iter
+  let of_list l = l |> Iter.of_list |> of_iter
+  let to_seq s = s |> V.to_offset_seq |> Seq.map of_offset
+  let to_rev_seq s = s |> V.to_rev_offset_seq |> Seq.map of_offset
+  let of_seq seq = seq |> Seq.map to_offset |> V.of_offset_seq
+  let add_seq seq s = Seq.fold_left (Fun.flip add) s seq
+  let to_iter s f = iter f s
+  let elements s = s |> to_iter |> Iter.to_list
+  let to_list s = elements s
+  let to_rev_iter s f = rev_iter f s
 
-  let iter s f =
-    let _ =
-      V.fold ~init:0
-        ~f:(fun offset is_set ->
-          (if is_set then
-             let v = of_offset offset in
-             f v);
-          offset + 1)
-        s
-    in
-    ()
+  let min_elt_opt s =
+    match List.sort K.compare (elements s) with x :: _ -> Some x | [] -> None
 
-  let elements s = Iter.to_list (iter s)
-  let of_seq seq = Seq.fold_left (Fun.flip @@ add) empty seq
-  let of_iter i = Iter.fold (Fun.flip add) empty i
-  let of_list l = of_seq (List.to_seq l)
-  let equal = V.Relaxed.equal
+  let max_elt_opt s =
+    match List.sort (fun x y -> Int.neg (K.compare x y)) (elements s) with
+    | x :: _ -> Some x
+    | [] -> None
+
+  let min_elt s = Option.get (min_elt_opt s)
+  let max_elt s = Option.get (max_elt_opt s)
+
+  let choose_opt s =
+    let n = Random.int (cardinal s) in
+    s |> to_iter |> Iter.take n |> Iter.head
+
+  let choose s = Option.get (choose_opt s)
+  let find_opt p s = s |> to_iter |> Iter.find p
+  let find p s = Option.get (find_opt p s)
+  let find_first = find
+  let find_first_opt = find_opt
+  let find_last_opt p s = s |> to_rev_iter |> Iter.find p
+  let find_last p s = Option.get (find_last_opt p s)
+  let map f s = s |> to_iter |> Iter.map f |> of_iter
+  let filter p s = s |> to_iter |> Iter.filter p |> of_iter
+  let filter_map f s = s |> to_iter |> Iter.filter_map f |> of_iter
+
+  (*TODO: maybe make partition at the level of bitvector. *)
+  let partition p s =
+    ( s |> to_iter |> Iter.filter p |> of_iter,
+      s |> to_iter |> Iter.filter (Fun.negate p) |> of_iter )
+
   let is_empty = V.is_empty
+
+  let mem e s = V.Relaxed.mem s (to_offset e)
+  let equal = V.Relaxed.equal
+  let subset = V.Relaxed.subset
+  let for_all p s = s |> to_iter |> Iter.for_all p
+  let exists p s = s |> to_iter |> Iter.exists p
 end
 
 module MakeSexp (K : sig
