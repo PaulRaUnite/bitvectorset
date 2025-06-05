@@ -99,4 +99,9 @@ let () =
       let stds = interpret_stdset ops in
       let bvs = interpret_bitvec ops in
       check_eq ~eq:Int.equal ~pp:Format.pp_print_int (StdSet.cardinal stds)
-        (BvSet.cardinal bvs))
+        (BvSet.cardinal bvs));
+  add_test ~name:"mem" [ int; set_gen ] (fun k ops ->
+      let stds = interpret_stdset ops in
+      let bvs = interpret_bitvec ops in
+      check_eq ~eq:Bool.equal ~pp:Format.pp_print_bool (StdSet.mem k stds)
+        (BvSet.mem k bvs))
