@@ -40,6 +40,14 @@ module Make (K : Hashtbl.HashedType) = struct
     V.set s e;
     s
 
+  let doubleton e1 e2 =
+    let e1 = to_offset e1 in
+    let e2 = to_offset e2 in
+    let s = V.create ~len:(Int.max e1 e2 + 1) in
+    V.set s e1;
+    V.set s e2;
+    s
+
   let remove e s =
     let e = to_offset e in
     if V.length s > e then (

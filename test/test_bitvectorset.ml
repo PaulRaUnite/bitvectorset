@@ -9,6 +9,8 @@ end
 
 type 'a set_op =
   | Empty
+  | Singleton of 'a
+  | Doubleton of 'a * 'a
   | Add of 'a * 'a set_op
   | Remove of 'a * 'a set_op
   | Union of 'a set_op * 'a set_op
@@ -19,6 +21,8 @@ let rec pp_t ppa f =
   let pp_t = pp_t0 ppa in
   function
   | Empty -> Format.fprintf f "empty"
+  | Singleton x -> Format.fprintf f "singleton %a" ppa x
+  | Doubleton (x, y) -> Format.fprintf f "doubleton %a %a" ppa x ppa y
   | Add (k, s) -> Format.fprintf f "add %a %a" ppa k pp_t s
   | Remove (k, s) -> Format.fprintf f "remove %a %a" ppa k pp_t s
   | Union (x, y) -> Format.fprintf f "union %a %a" pp_t x pp_t y
@@ -34,6 +38,8 @@ let rec interpret_bitvec =
   let interpret = interpret_bitvec in
   function
   | Empty -> empty
+  | Singleton x -> singleton x
+  | Doubleton (x, y) -> doubleton x y
   | Add (k, s) -> add k (interpret s)
   | Remove (k, s) -> remove k (interpret s)
   | Union (x, y) -> union (interpret x) (interpret y)
@@ -45,6 +51,8 @@ let rec interpret_stdset =
   let interpret = interpret_stdset in
   function
   | Empty -> empty
+  | Singleton x -> singleton x
+  | Doubleton (x, y) -> add x (singleton y)
   | Add (k, s) -> add k (interpret s)
   | Remove (k, s) -> remove k (interpret s)
   | Union (x, y) -> union (interpret x) (interpret y)
@@ -63,6 +71,8 @@ let set_gen : int set_op gen =
          choose
            [
              const Empty;
+             map [ int ] (fun x -> Singleton x);
+             map [ int; int ] (fun x y -> Doubleton (x, y));
              map [ int; set_gen ] (fun k s -> Add (k, s));
              map [ int; set_gen ] (fun k s -> Remove (k, s));
              map [ set_gen; set_gen ] (fun x y -> Union (x, y));
