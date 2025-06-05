@@ -5,15 +5,11 @@
 (generate_opam_files true)
 
 (source
- (github username/reponame))
+ (github PaulRaUnite/bitvectorset))
 
-(authors "Author Name <author@example.com>")
-
-(maintainers "Maintainer Name <maintainer@example.com>")
+(authors "Pavlo Tokariev <pavlo.tokariev@gmail.com>")
 
 (license LICENSE)
-
-(documentation https://url/to/documentation)
 
 (package
  (name bitvectorset)
@@ -23,13 +19,15 @@
   (ocaml
    (>= 5.0.0))
   fast_bitvector
-  iter
+  (iter
+   (>= 1.3))
   (sexplib0
    (>= 0.17))
-  ppx_inline_test
+  (ppx_inline_test
+   (>= 0.17.0))
   (crowbar :with-test)
   (ocaml-option-afl :with-test))
  (tags
-  ("add topics" "to describe" your project)))
+  ("bitvector" "set")))
 
 ; See the complete stanza docs at https://dune.readthedocs.io/en/stable/reference/dune-project/index.html
