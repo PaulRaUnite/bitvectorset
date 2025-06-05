@@ -1,2 +1,4 @@
 (test
- (name test_bitvectorset))
+ (name test_bitvectorset)
+ (libraries crowbar bitvectorset)
+ (ocamlopt_flags -S))

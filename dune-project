@@ -20,16 +20,15 @@
  (synopsis "A short synopsis")
  (description "A longer description")
  (depends
-  ocaml
+  (ocaml
+   (>= 5.0.0))
   fast_bitvector
   iter
   (sexplib0
    (>= 0.17))
-  ppx_assert
   ppx_inline_test
-  ppx_compare
-  ppx_sexp_conv
-  )
+  (crowbar :with-test)
+  (ocaml-option-afl :with-test))
  (tags
   ("add topics" "to describe" your project)))
 

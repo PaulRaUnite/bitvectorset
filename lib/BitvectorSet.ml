@@ -28,7 +28,9 @@ module Make (K : Hashtbl.HashedType) = struct
   let add e s =
     let e = to_offset e in
     let len_req = e + 1 in
-    let s = if V.length s < len_req then V.extend s ~len:len_req else s in
+    let s =
+      if V.length s < len_req then V.extend s ~len:len_req else V.copy s
+    in
     V.set_to s e true;
     s
 
@@ -40,8 +42,11 @@ module Make (K : Hashtbl.HashedType) = struct
 
   let remove e s =
     let e = to_offset e in
-    if V.length s > e then V.set_to s e false;
-    s
+    if V.length s > e then (
+      let s = V.copy s in
+      V.set_to s e false;
+      s)
+    else s
 
   let union x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
@@ -59,7 +64,6 @@ module Make (K : Hashtbl.HashedType) = struct
 
   let equal_modulo = V.Relaxed.equal_modulo
 
-  (*TODO: semantically does not correspond to Set.S, should follow the order defined by K *)
   let fold f s init =
     V.fold_lefti ~init
       ~f:(fun acc i bit -> if bit then f (of_offset i) acc else acc)
@@ -118,6 +122,7 @@ module Make (K : Hashtbl.HashedType) = struct
   let subset = V.Relaxed.subset
   let for_all p s = s |> to_iter |> Iter.for_all p
   let exists p s = s |> to_iter |> Iter.exists p
+  let pp ppe f = Format.pp_print_iter iter ppe f
 end
 
 module MakeSexp (K : sig
@@ -134,22 +139,28 @@ end
 let%test_module _ =
   (module struct
     module T = MakeSexp (struct
-      include String
+      include Int
 
-      let sexp_of_t = Sexplib0.Sexp_conv.sexp_of_string
-      let t_of_sexp = Sexplib0.Sexp_conv.string_of_sexp
+      let sexp_of_t = Sexplib0.Sexp_conv.sexp_of_int
+      let t_of_sexp = Sexplib0.Sexp_conv.int_of_sexp
     end)
 
     open T
 
-    let a = of_list [ "a" ]
-    let b = of_list [ "b" ]
-
-    (* let c = of_list [ "c" ] *)
-    let ab = of_list [ "a"; "b" ]
-    let bc = of_list [ "b"; "c" ]
+    let a = 1
+    let b = 2
+    let c = 3
+    let a_s = of_list [ a ]
+    let b_s = add b empty
+    let c_s = of_list [ c ]
+    let ab_s = of_list [ a; b ]
+    let bc_s = add b (add c empty)
     let%test _ = is_empty empty
-    let%test _ = equal (inter a ab) a
-    let%test _ = equal (inter ab bc) b
-    let%test _ = equal empty (inter a b)
+    let%test _ = not @@ is_empty a_s
+    let%test _ = not @@ is_empty b_s
+    let%test _ = not @@ is_empty c_s
+    let%test _ = equal (inter a_s ab_s) a_s
+    let%test _ = equal (inter ab_s bc_s) b_s
+    let%test _ = equal empty (inter a_s b_s)
+    let%test _ = cardinal (add a (add b empty)) = 2
   end)
