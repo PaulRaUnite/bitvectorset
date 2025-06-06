@@ -154,28 +154,41 @@ module Make (B : BijectionToInt.S) = struct
   let pp ppe f = Format.pp_print_iter iter ppe f
 end
 
-module MakeSexp
-    (B : BijectionToInt.S)
-    (K : Sexplib0.Sexpable.S with type t = B.elt) =
-struct
-  include Make (B)
+module WithSexp
+    (M : sig
+      type elt
+      type t
 
-  let sexp_of_t s = Sexplib0.Sexp_conv.sexp_of_list K.sexp_of_t (elements s)
-  let t_of_sexp e = e |> Sexplib0.Sexp_conv.list_of_sexp K.t_of_sexp |> of_list
+      val to_list : t -> elt list
+      val of_list : elt list -> t
+    end)
+    (K : Sexplib0.Sexpable.S with type t = M.elt) =
+struct
+  let sexp_of_t s = Sexplib0.Sexp_conv.sexp_of_list K.sexp_of_t (M.to_list s)
+
+  let t_of_sexp e =
+    e |> Sexplib0.Sexp_conv.list_of_sexp K.t_of_sexp |> M.of_list
+
   let print s = print_endline @@ Sexplib0.Sexp.to_string @@ sexp_of_t s
 end
 
 let%test_module _ =
   (module struct
-    module T =
-      MakeSexp
-        (BijectionToInt.Int)
-        (struct
-          type t = int
+    module T = Make (BijectionToInt.Int)
 
-          let sexp_of_t = Sexplib0.Sexp_conv.sexp_of_int
-          let t_of_sexp = Sexplib0.Sexp_conv.int_of_sexp
-        end)
+    module S = struct
+      include T
+
+      include
+        WithSexp
+          (T)
+          (struct
+            type t = int
+
+            let sexp_of_t = Sexplib0.Sexp_conv.sexp_of_int
+            let t_of_sexp = Sexplib0.Sexp_conv.int_of_sexp
+          end)
+    end
 
     open T
 
