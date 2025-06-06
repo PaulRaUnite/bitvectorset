@@ -1,32 +1,53 @@
-module Make (K : Hashtbl.HashedType) = struct
+module BijectionToInt = struct
+  module type S = sig
+    type elt
+
+    val to_offset : elt -> int
+    val of_offset : int -> elt
+  end
+
+  module Int = struct
+    type elt = int
+
+    let to_offset = Fun.id
+    let of_offset = Fun.id
+  end
+
+  module Hashed (K : Hashtbl.HashedType) = struct
+    module H = Hashtbl.Make (K)
+
+    type elt = K.t
+
+    let mapping : int H.t = H.create 128
+    let inverse : K.t Dynarray.t = Dynarray.create ()
+
+    let to_offset k =
+      match H.find_opt mapping k with
+      | Some x -> x
+      | None ->
+          let x = Dynarray.length inverse in
+          H.add mapping k x;
+          Dynarray.add_last inverse k;
+          x
+
+    let of_offset i = Dynarray.get inverse i
+  end
+end
+
+module Make (B : BijectionToInt.S) = struct
   module V = Fast_bitvector
-  module H = Hashtbl.Make (K)
 
-  let mapping : int H.t = H.create 128
-  let inverse : K.t Dynarray.t = Dynarray.create ()
-
-  type elt = K.t
+  type elt = B.elt
   type t = V.t
 
   let empty = V.create ~len:0
-
-  let to_offset k =
-    match H.find_opt mapping k with
-    | Some x -> x
-    | None ->
-        let x = Dynarray.length inverse in
-        H.add mapping k x;
-        Dynarray.add_last inverse k;
-        x
-
-  let of_offset i = Dynarray.get inverse i
 
   let print_raw s =
     print_endline @@ V.Little_endian.to_debug_string s;
     flush_all ()
 
   let add e s =
-    let e = to_offset e in
+    let e = B.to_offset e in
     let len_req = e + 1 in
     let s =
       if V.length s < len_req then V.extend s ~len:len_req else V.copy s
@@ -35,21 +56,21 @@ module Make (K : Hashtbl.HashedType) = struct
     s
 
   let singleton e =
-    let e = to_offset e in
+    let e = B.to_offset e in
     let s = V.create ~len:(e + 1) in
     V.set s e;
     s
 
   let doubleton e1 e2 =
-    let e1 = to_offset e1 in
-    let e2 = to_offset e2 in
+    let e1 = B.to_offset e1 in
+    let e2 = B.to_offset e2 in
     let s = V.create ~len:(Int.max e1 e2 + 1) in
     V.set s e1;
     V.set s e2;
     s
 
   let remove e s =
-    let e = to_offset e in
+    let e = B.to_offset e in
     if V.length s > e then (
       let s = V.copy s in
       V.set_to s e false;
@@ -74,17 +95,17 @@ module Make (K : Hashtbl.HashedType) = struct
 
   let fold f s init =
     V.fold_lefti ~init
-      ~f:(fun acc i bit -> if bit then f (of_offset i) acc else acc)
+      ~f:(fun acc i bit -> if bit then f (B.of_offset i) acc else acc)
       s
 
-  let iter f s = V.iter_seti ~f:(Fun.compose f of_offset) s
-  let rev_iter f s = V.rev_iter_seti ~f:(Fun.compose f of_offset) s
+  let iter f s = V.iter_seti ~f:(Fun.compose f B.of_offset) s
+  let rev_iter f s = V.rev_iter_seti ~f:(Fun.compose f B.of_offset) s
   let cardinal s = V.popcount s
-  let of_iter i = i |> Iter.map to_offset |> V.of_offset_iter
+  let of_iter i = i |> Iter.map B.to_offset |> V.of_offset_iter
   let of_list l = l |> Iter.of_list |> of_iter
-  let to_seq s = s |> V.to_offset_seq |> Seq.map of_offset
-  let to_rev_seq s = s |> V.to_rev_offset_seq |> Seq.map of_offset
-  let of_seq seq = seq |> Seq.map to_offset |> V.of_offset_seq
+  let to_seq s = s |> V.to_offset_seq |> Seq.map B.of_offset
+  let to_rev_seq s = s |> V.to_rev_offset_seq |> Seq.map B.of_offset
+  let of_seq seq = seq |> Seq.map B.to_offset |> V.of_offset_seq
   let add_seq seq s = Seq.fold_left (Fun.flip add) s seq
   let to_iter s f = iter f s
   let elements s = s |> to_iter |> Iter.to_list
@@ -125,7 +146,7 @@ module Make (K : Hashtbl.HashedType) = struct
       s |> to_iter |> Iter.filter (Fun.negate p) |> of_iter )
 
   let is_empty = V.is_empty
-  let mem e s = V.Relaxed.mem s (to_offset e)
+  let mem e s = V.Relaxed.mem s (B.to_offset e)
   let equal = V.Relaxed.equal
   let subset = V.Relaxed.subset
   let for_all p s = s |> to_iter |> Iter.for_all p
@@ -133,25 +154,28 @@ module Make (K : Hashtbl.HashedType) = struct
   let pp ppe f = Format.pp_print_iter iter ppe f
 end
 
-module MakeSexp (K : sig
-  include Hashtbl.HashedType
-  include Sexplib0.Sexpable.S with type t := t
-end) =
+module MakeSexp
+    (B : BijectionToInt.S)
+    (K : Sexplib0.Sexpable.S with type t = B.elt) =
 struct
-  include Make (K)
+  include Make (B)
 
   let sexp_of_t s = Sexplib0.Sexp_conv.sexp_of_list K.sexp_of_t (elements s)
+  let t_of_sexp e = e |> Sexplib0.Sexp_conv.list_of_sexp K.t_of_sexp |> of_list
   let print s = print_endline @@ Sexplib0.Sexp.to_string @@ sexp_of_t s
 end
 
 let%test_module _ =
   (module struct
-    module T = MakeSexp (struct
-      include Int
+    module T =
+      MakeSexp
+        (BijectionToInt.Int)
+        (struct
+          type t = int
 
-      let sexp_of_t = Sexplib0.Sexp_conv.sexp_of_int
-      let t_of_sexp = Sexplib0.Sexp_conv.int_of_sexp
-    end)
+          let sexp_of_t = Sexplib0.Sexp_conv.sexp_of_int
+          let t_of_sexp = Sexplib0.Sexp_conv.int_of_sexp
+        end)
 
     open T
 

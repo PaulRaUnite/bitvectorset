@@ -1,5 +1,5 @@
 open Crowbar
-module BvSet = BitvectorSet.Make (Int)
+module BvSet = BitvectorSet.Make (BitvectorSet.BijectionToInt.Hashed (Int))
 
 module StdSet = struct
   include Set.Make (Int)
