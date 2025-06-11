@@ -9,8 +9,8 @@ module BijectionToInt = struct
   module Int = struct
     type elt = int
 
-    let to_offset = Fun.id
-    let of_offset = Fun.id
+    let to_offset : elt -> int = Fun.id
+    let of_offset : int -> elt = Fun.id
   end
 
   module Hashed (K : Hashtbl.HashedType) = struct
@@ -42,11 +42,11 @@ module Make (B : BijectionToInt.S) = struct
 
   let empty = V.create ~len:0
 
-  let print_raw s =
+  let[@inline always] print_raw s =
     print_endline @@ V.Little_endian.to_debug_string s;
     flush_all ()
 
-  let add e s =
+  let[@inline always] add e s =
     let e = B.to_offset e in
     let len_req = e + 1 in
     let s =
@@ -55,13 +55,13 @@ module Make (B : BijectionToInt.S) = struct
     V.set_to s e true;
     s
 
-  let singleton e =
+  let[@inline always] singleton e =
     let e = B.to_offset e in
     let s = V.create ~len:(e + 1) in
     V.set s e;
     s
 
-  let doubleton e1 e2 =
+  let[@inline always] doubleton e1 e2 =
     let e1 = B.to_offset e1 in
     let e2 = B.to_offset e2 in
     let s = V.create ~len:(Int.max e1 e2 + 1) in
@@ -69,7 +69,7 @@ module Make (B : BijectionToInt.S) = struct
     V.set s e2;
     s
 
-  let remove e s =
+  let[@inline always] remove e s =
     let e = B.to_offset e in
     if V.length s > e then (
       let s = V.copy s in
@@ -77,40 +77,46 @@ module Make (B : BijectionToInt.S) = struct
       s)
     else s
 
-  let union x y =
+  let[@inline always] union x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
     V.Relaxed.union ~result x y
 
-  let inter x y =
+  let[@inline always] inter x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
     V.Relaxed.inter ~result x y
 
   let disjoint = V.Relaxed.disjoint
 
-  let diff x y =
+  let[@inline always] diff x y =
     let result = V.create ~len:(Int.max (V.length x) (V.length y)) in
     V.Relaxed.diff ~result x y
 
   let equal_modulo = V.Relaxed.equal_modulo
 
-  let fold f s init =
+  let[@inline always] fold f s init =
     V.fold_lefti ~init
       ~f:(fun acc i bit -> if bit then f (B.of_offset i) acc else acc)
       s
 
-  let iter f s = V.iter_seti ~f:(Fun.compose f B.of_offset) s
-  let rev_iter f s = V.rev_iter_seti ~f:(Fun.compose f B.of_offset) s
-  let cardinal s = V.popcount s
-  let of_iter i = i |> Iter.map B.to_offset |> V.of_offset_iter
-  let of_list l = l |> Iter.of_list |> of_iter
-  let to_seq s = s |> V.to_offset_seq |> Seq.map B.of_offset
-  let to_rev_seq s = s |> V.to_rev_offset_seq |> Seq.map B.of_offset
-  let of_seq seq = seq |> Seq.map B.to_offset |> V.of_offset_seq
-  let add_seq seq s = Seq.fold_left (Fun.flip add) s seq
-  let to_iter s f = iter f s
-  let elements s = s |> to_iter |> Iter.to_list
-  let to_list s = elements s
-  let to_rev_iter s f = rev_iter f s
+  let[@inline always] iter f s = V.iter_seti ~f:(Fun.compose f B.of_offset) s
+
+  let[@inline always] rev_iter f s =
+    V.rev_iter_seti ~f:(Fun.compose f B.of_offset) s
+
+  let[@inline always] cardinal s = V.popcount s
+  let[@inline always] of_iter i = i |> Iter.map B.to_offset |> V.of_offset_iter
+  let[@inline always] of_list l = l |> Iter.of_list |> of_iter
+  let[@inline always] to_seq s = s |> V.to_offset_seq |> Seq.map B.of_offset
+
+  let[@inline always] to_rev_seq s =
+    s |> V.to_rev_offset_seq |> Seq.map B.of_offset
+
+  let[@inline always] of_seq seq = seq |> Seq.map B.to_offset |> V.of_offset_seq
+  let[@inline always] add_seq seq s = Seq.fold_left (Fun.flip add) s seq
+  let[@inline always] to_iter s f = iter f s
+  let[@inline always] elements s = s |> to_iter |> Iter.to_list
+  let[@inline always] to_list s = elements s
+  let[@inline always] to_rev_iter s f = rev_iter f s
 
   (* 
   TODO: not sure this is useful for me at all
@@ -125,33 +131,35 @@ module Make (B : BijectionToInt.S) = struct
   let min_elt s = Option.get (min_elt_opt s)
   let max_elt s = Option.get (max_elt_opt s) *)
 
-  let choose_opt s =
+  let[@inline always] choose_opt s =
     let n = Random.int (cardinal s) in
     s |> to_iter |> Iter.take n |> Iter.head
 
-  let choose s = Option.get (choose_opt s)
-  let find_opt p s = s |> to_iter |> Iter.find p
-  let find p s = Option.get (find_opt p s)
+  let[@inline always] choose s = Option.get (choose_opt s)
+  let[@inline always] find_opt p s = s |> to_iter |> Iter.find p
+  let[@inline always] find p s = Option.get (find_opt p s)
   let find_first = find
   let find_first_opt = find_opt
-  let find_last_opt p s = s |> to_rev_iter |> Iter.find p
-  let find_last p s = Option.get (find_last_opt p s)
-  let map f s = s |> to_iter |> Iter.map f |> of_iter
-  let filter p s = s |> to_iter |> Iter.filter p |> of_iter
-  let filter_map f s = s |> to_iter |> Iter.filter_map f |> of_iter
+  let[@inline always] find_last_opt p s = s |> to_rev_iter |> Iter.find p
+  let[@inline always] find_last p s = Option.get (find_last_opt p s)
+  let[@inline always] map f s = s |> to_iter |> Iter.map f |> of_iter
+  let[@inline always] filter p s = s |> to_iter |> Iter.filter p |> of_iter
+
+  let[@inline always] filter_map f s =
+    s |> to_iter |> Iter.filter_map f |> of_iter
 
   (*TODO: maybe make partition at the level of bitvector. *)
-  let partition p s =
+  let[@inline always] partition p s =
     ( s |> to_iter |> Iter.filter p |> of_iter,
       s |> to_iter |> Iter.filter (Fun.negate p) |> of_iter )
 
   let is_empty = V.is_empty
-  let mem e s = V.Relaxed.mem s (B.to_offset e)
+  let[@inline always] mem e s = V.Relaxed.mem s (B.to_offset e)
   let equal = V.Relaxed.equal
   let subset = V.Relaxed.subset
-  let for_all p s = s |> to_iter |> Iter.for_all p
-  let exists p s = s |> to_iter |> Iter.exists p
-  let pp ppe f = Format.pp_print_iter iter ppe f
+  let[@inline always] for_all p s = s |> to_iter |> Iter.for_all p
+  let[@inline always] exists p s = s |> to_iter |> Iter.exists p
+  let[@inline always] pp ppe f = Format.pp_print_iter iter ppe f
 end
 
 module WithSexp
